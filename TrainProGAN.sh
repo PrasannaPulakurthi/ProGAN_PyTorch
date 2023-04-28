@@ -13,11 +13,11 @@
 #
 
 # Name of the job - You'll probably want to customize this.
-#SBATCH --job-name=PGAN_cifar10    # Job name
+#SBATCH --job-name=PGAN_CelebA    # Job name
 
 # Standard out and Standard Error output files
-#SBATCH --output=Results/cifar10/%x_%j.out   # Instruct Slurm to connect the batch script's standard output directly to the file name specified in the "filename pattern".
-#SBATCH --error=Results/cifar10/%x_%j.err    # Instruct Slurm to connect the batch script's standard error directly to the file name specified in the "filename pattern".
+#SBATCH --output=Results/CelebA/%x_%j.out   # Instruct Slurm to connect the batch script's standard output directly to the file name specified in the "filename pattern".
+#SBATCH --error=Results/CelebA/%x_%j.err    # Instruct Slurm to connect the batch script's standard error directly to the file name specified in the "filename pattern".
 
 # To send emails, set the adcdress below and remove one of the "#" signs.
 #SBATCH --mail-user=pp4405@rit.edu
