@@ -56,7 +56,7 @@ def main():
     gen.train()
     critic.train()
 
-    generate_examples(gen, config.MAX_IMG_SIZE_IDX-1, truncation=10, n=50000)
+    generate_examples(gen, config.MAX_IMG_SIZE_IDX, truncation=10, n=50000)
 
 if __name__ == "__main__":
     main()
