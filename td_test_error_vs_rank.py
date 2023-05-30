@@ -18,9 +18,13 @@ from model import Discriminator, Generator
 from math import log2
 from tqdm import tqdm
 import config
+from td_utils import *
 
 torch.backends.cudnn.benchmarks = True
 
+import sys
+layer_name = sys.argv[1]
+save_dir = sys.argv[2]
 
 
 def main():
@@ -28,7 +32,7 @@ def main():
     createdir("Results")
     createdir("Results/" + config.DATASET_NAME)
     createdir("Results/" + config.DATASET_NAME + "/Generated_Images")
-
+    createdir(save_dir)
     # initialize gen and disc, note: discriminator should be called critic,
     # according to WGAN paper (since it no longer outputs between [0, 1])
     # but really who cares..
@@ -54,10 +58,19 @@ def main():
         config.CHECKPOINT_CRITIC, critic, opt_critic, config.LEARNING_RATE,
     )
 
-    gen.train()
-    critic.train()
-    print(config.MAX_IMG_SIZE_IDX)
-    generate_examples(gen, config.MAX_IMG_SIZE_IDX, truncation=10, n=50000)
+    #gen.train()
+    #critic.train()
+    
+    conv_layers_info = get_conv2d_layers_info(gen)
+    print('Convolution layers of the Generator: ')
+    for c,v in conv_layers_info.items():
+        print('Layer "',c,'", size: ', v)
+
+    ranks, approximations = get_conv2d_layer_approximation_vs_rank(gen, layer_name, max_rank = None, decompose_type='cp', save_fig=True, save_path=save_dir)
+    print(f"Ranks: {ranks}")
+    print(f"Approximation errors {approximations}")
+
+    #generate_examples(gen, config.MAX_IMG_SIZE_IDX, truncation=10, n=50000)
 
 if __name__ == "__main__":
     main()

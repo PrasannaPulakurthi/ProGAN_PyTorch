@@ -23,6 +23,22 @@ import config
 
 torch.backends.cudnn.benchmarks = True
 
+#import sys
+#save_dir = sys.argv[1]
+#load = sys.argv[2]
+#epochs = sys.argv[3]
+
+#try:
+#    gen_checkpoint = sys.argv[3] # checkpoint to load: if checkpoint has field "modify", then modify the model architecture accordingly
+#    crit_chekcpoint = sys.argv[4]
+#    assert(os.path.exists(gen_checkpoint))
+#    assert(os.path.exists(crit_chekcpoint))
+#except:
+#    gen_checkpoint = config.GEN_CHECKPOINT
+#    crit_chekcpoint = config.CRIT_CHECKPOINT
+
+
+
 
 def get_loader(image_size):
     transform = transforms.Compose(
@@ -130,83 +146,44 @@ def train_fn(
     return tensorboard_step, alpha
 
 
-def main():
-
-    createdir("Results2")
-    createdir("Results2/" + config.DATASET_NAME)
-    createdir("Results2/" + config.DATASET_NAME + "/Images")
-
-    # initialize gen and disc, note: discriminator should be called critic,
-    # according to WGAN paper (since it no longer outputs between [0, 1])
-    # but really who cares..
-    gen = Generator(
-        config.Z_DIM, config.IN_CHANNELS, img_channels=config.CHANNELS_IMG
-    ).to(config.DEVICE)
-    critic = Discriminator(
-        config.Z_DIM, config.IN_CHANNELS, img_channels=config.CHANNELS_IMG
-    ).to(config.DEVICE)
-
-    # initialize optimizers and scalers for FP16 training
-    opt_gen = optim.Adam(gen.parameters(), lr=config.LEARNING_RATE, betas=(0.0, 0.99))
-    opt_critic = optim.Adam(critic.parameters(), lr=config.LEARNING_RATE, betas=(0.0, 0.99))
+def finetune(gen, critic, opt_gen, opt_ciritc, epochs, save_dir ):
     
     scaler_critic = torch.cuda.amp.GradScaler()
     scaler_gen = torch.cuda.amp.GradScaler()
 
     # for tensorboard plotting
-    writer = SummaryWriter("Results/" + config.DATASET_NAME + "/logs/gan1")
-
-    if config.LOAD_MODEL:
-        load_checkpoint(
-            config.CHECKPOINT_GEN, gen, opt_gen, config.LEARNING_RATE,
-        )
-        load_checkpoint(
-            config.CHECKPOINT_CRITIC, critic, opt_critic, config.LEARNING_RATE,
-        )
+    writer = SummaryWriter(save_dir+ "/logs/gan1")
 
     gen.train()
     critic.train()
-    quit()
 
     tensorboard_step = 0
     # start at step that corresponds to img size that we set in config
     step = int(log2(config.START_TRAIN_AT_IMG_SIZE / 4))
-    for num_epochs in config.PROGRESSIVE_EPOCHS[step:]:
-        alpha = 1e-5  # start with very low alpha
-        loader, dataset = get_loader(4 * 2 ** step)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
-        print(f"Current image size: {4 * 2 ** step}")
-
-        # Reset optimizer values for each scale
-        opt_gen = optim.Adam(gen.parameters(), lr=config.LEARNING_RATE, betas=(0.0, 0.99))
-        opt_critic = optim.Adam(critic.parameters(), lr=config.LEARNING_RATE, betas=(0.0, 0.99))
     
-        for epoch in range(num_epochs):
-            print(f"Epoch [{epoch+1}/{num_epochs}]")
-            tensorboard_step, alpha = train_fn(
-                critic,
-                gen,
-                loader,
-                dataset,
-                step,
-                alpha,
-                opt_critic,
-                opt_gen,
-                tensorboard_step,
-                writer,
-                scaler_gen,
-                scaler_critic,
-                epoch,
-            )
+    alpha = 1e-5  # start with very low alpha
+    loader, dataset = get_loader(4 * 2 ** step)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
+    print(f"Current image size: {4 * 2 ** step}")
+    
+    for epoch in range(epochs):
+        print(f"Epoch [{epoch+1}/{num_epochs}]")
+        tensorboard_step, alpha = train_fn(
+            critic,
+            gen,
+            loader,
+            dataset,
+            step,
+            alpha,
+            opt_critic,
+            opt_gen,
+            tensorboard_step,
+            writer,
+            scaler_gen,
+            scaler_critic,
+            epoch,
+        )
 
-            if config.SAVE_MODEL:
-                save_checkpoint(gen, opt_gen, 'Results/' + config.DATASET_NAME + f"/generator_{step}.pth")
-                save_checkpoint(critic, opt_critic, 'Results/' + config.DATASET_NAME + f"/critic_{step}.pth")
 
-        step += 1  # progress to the next img size
+    save_checkpoint(gen, opt_gen, filename=save_dir+ "/generator.pth")
+    save_checkpoint(critic, opt_critic, filename=save_dir+ "/critic.pth")
 
-        if config.SAVE_MODEL:
-            save_checkpoint(gen, opt_gen, filename=config.CHECKPOINT_GEN)
-            save_checkpoint(critic, opt_critic, filename=config.CHECKPOINT_CRITIC)
-
-if __name__ == "__main__":
-    main()

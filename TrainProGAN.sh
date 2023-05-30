@@ -27,11 +27,10 @@
 
 # 5 days is the run time MAX, anything over will be KILLED unless you talk with RC
 # Time limit days-hrs:min:sec
-#SBATCH --time=1-0:0:0
+#SBATCH --time=0-0:10:0
 
 # Put the job in the appropriate partition matchine the account and request FOUR cores
-#SBATCH --account=vividgan   #this is the name created for your project when you filled out the questionnaire
-#SBATCH --partition=tier3  #currently tier3 is the partition where everyone is put.  To get a listing of partitions where the account can run use the command my-accounts
+#SBATCH --partition=debug  #currently tier3 is the partition where everyone is put.  To get a listing of partitions where the account can run use the command my-accounts
 #SBATCH --ntasks 1  #This option advises the Slurm controller that job steps run within the allocation will launch a maximum of number tasks and to provide for sufficient resources. The default is one task per node.
 #SBATCH --cpus-per-task=9
 
@@ -39,10 +38,11 @@
 #SBATCH --mem=32g
 #SBATCH --gres=gpu:a100:1
 
-spack load py-torchvision /ua533mj
+spack env activate tensors-23050901
+#spack load py-torchvision /ua533mj
 spack load py-scipy /amletdx
 spack load py-tensorboard /xdxzh5y
 
 # time torchrun --standalone --nproc_per_node=1 train.py
 time python -u train.py
-time python -u test.py
+#time python -u td_test.py
