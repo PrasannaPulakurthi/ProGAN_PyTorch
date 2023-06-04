@@ -48,7 +48,6 @@ def main():
 
     load_checkpoint(
         config.CHECKPOINT_GEN, gen, opt_gen, config.LEARNING_RATE,
-        #'/home/mm3424/Research/ProGAN/Backup_Results/CelebA/generator_3.pth', gen, opt_gen, config.LEARNING_RATE,
     )
     load_checkpoint(
         config.CHECKPOINT_CRITIC, critic, opt_critic, config.LEARNING_RATE,

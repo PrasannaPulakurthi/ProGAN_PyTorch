@@ -132,9 +132,9 @@ def train_fn(
 
 def main():
 
-    createdir("Results2")
-    createdir("Results2/" + config.DATASET_NAME)
-    createdir("Results2/" + config.DATASET_NAME + "/Images")
+    createdir("Results")
+    createdir("Results/" + config.DATASET_NAME)
+    createdir("Results/" + config.DATASET_NAME + "/Images")
 
     # initialize gen and disc, note: discriminator should be called critic,
     # according to WGAN paper (since it no longer outputs between [0, 1])
@@ -166,7 +166,6 @@ def main():
 
     gen.train()
     critic.train()
-    quit()
 
     tensorboard_step = 0
     # start at step that corresponds to img size that we set in config
