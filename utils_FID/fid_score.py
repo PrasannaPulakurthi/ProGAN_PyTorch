@@ -20,7 +20,6 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import os
 import tensorflow.compat.v1 as tf
-# from scipy.misc import imread
 from imageio import imread
 from scipy import linalg
 import pathlib
