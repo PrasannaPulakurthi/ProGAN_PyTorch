@@ -8,6 +8,7 @@ from tensorly.decomposition import tucker
 import matplotlib.pyplot as plt
 import os
 import json
+import config
 
 tl.set_backend('pytorch')
 
@@ -83,14 +84,14 @@ def get_conv2d_layer_approximation_vs_rank(model, conv_layer_name, max_rank = No
 
     return ranks, approximations
 
-def decompose_and_replace_conv_layer_by_name(module, layer_name, rank=None, freeze=False, device='cpu'):
+def decompose_and_replace_conv_layer_by_name(module, layer_name, rank=None, freeze=False):
     
     if rank is None:
         raise ValueError("Please specify a rank for decomposition")
     
     rank = torch.tensor(rank, dtype=torch.int32)
-    if device=='cuda':
-        rank=rank.to('cuda' if device=='cuda' else 'cpu')
+    #if device=='cuda':
+    rank=rank.to(config.DEVICE)
     
     # decompose convolutional layers of a given module using CP decomposition
     
@@ -101,7 +102,7 @@ def decompose_and_replace_conv_layer_by_name(module, layer_name, rank=None, free
         if isinstance(layer,nn.Conv2d):
             if layer_name == fullname:
                 new_layers, error = cp_decomposition_con_layer(layer.cpu(), rank)
-                new_layers = new_layers.to(device)
+                new_layers = new_layers.to(config.DEVICE)
                 setattr(parent, name, new_layers)
                 break
         
@@ -122,7 +123,7 @@ def cp_decomposition_con_layer(layer, rank):
     padding0 = layer.padding[0]
     padding1 = layer.padding[1]
 
-    (weights, factors), decomp_err = parafac(layer.weight.data, rank=rank, init='svd', return_errors=True)
+    (weights, factors), decomp_err = parafac(layer.weight.data, rank=rank, init='random', return_errors=True)
     c_out, c_in, x, y = factors[0], factors[1], factors[2], factors[3]
 
     bias_flag = layer.bias is not None

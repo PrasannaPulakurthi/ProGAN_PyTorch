@@ -1,5 +1,6 @@
 """ Training of ProGAN using WGAN-GP loss"""
 
+import logging
 import os
 import torch
 import torch.optim as optim
@@ -15,13 +16,22 @@ from utils import (
     load_checkpoint,
     createdir,
     generate_examples,
+    generate_fixed_examples,
+    plot_loss_to_tensorboard,
+    plot_images_to_tensorboard,
 )
 from model import Discriminator, Generator
 from math import log2
 from tqdm import tqdm
 import config
+from scipy.stats import truncnorm
+
+#from utils_FID.inception_score import _init_inception
+#from utils_FID.fid_score import create_inception_graph, check_or_download_inception
 
 torch.backends.cudnn.benchmarks = True
+
+_logger = logging.getLogger(__name__)
 
 #import sys
 #save_dir = sys.argv[1]
@@ -73,12 +83,21 @@ def train_fn(
     alpha,
     opt_critic,
     opt_gen,
-    tensorboard_step,
+    tensorboard_img_step,
+    tensorboard_loss_step,
     writer,
     scaler_gen,
     scaler_critic,
     epoch,
+    save_dir
 ):
+    # Generated Image parameters
+    truncation=10
+    n = 100
+    num_batches = len(loader)
+    #fixed_noise = torch.tensor(truncnorm.rvs(-truncation, truncation, size=(n, config.Z_DIM, 1, 1)), device=config.DEVICE, dtype=torch.float32)
+    fixed_noise = torch.randn(n, config.Z_DIM, 1, 1).to(config.DEVICE)
+    #
     loop = tqdm(loader, leave=True)
     for batch_idx, (real, _) in enumerate(loop):
         real = real.to(config.DEVICE)
@@ -100,53 +119,75 @@ def train_fn(
                     + config.LAMBDA_GP * gp
                     + (0.001 * torch.mean(critic_real ** 2))
                 )
+            if torch.isnan(loss_critic):
+                _logger.error("critic loss is NaN (Before scaling) at step %d, epoch %d, batch idx %d ", step, epoch, batch_idx)
 
             opt_critic.zero_grad()
             scaler_critic.scale(loss_critic).backward()
+            if torch.isnan(loss_critic):
+                _logger.error("critic loss is NaN (After scaling) at step %d, epoch %d, batch idx %d ", step, epoch, batch_idx)
             scaler_critic.step(opt_critic)
             scaler_critic.update()
+            if torch.isnan(loss_critic):
+                _logger.error("critic loss is NaN (After unscaling) at step %d, epoch %d, batch idx %d ", step, epoch, batch_idx)
 
             # Train Generator: max E[critic(gen_fake)] <-> min -E[critic(gen_fake)]
             with torch.cuda.amp.autocast():
                 gen_fake = critic(fake, alpha, step)
                 loss_gen = -torch.mean(gen_fake)
 
+
+            if torch.isnan(loss_gen):
+                _logger.error("generator loss is NaN (Before scaling) at step %d, epoch %d, batch idx %d ", step, epoch, batch_idx)
+
             opt_gen.zero_grad()
             scaler_gen.scale(loss_gen).backward()
+            if torch.isnan(loss_gen):
+                _logger.error("generator loss is NaN (After scaling) at step %d, epoch %d, batch idx %d ", step, epoch, batch_idx)
             scaler_gen.step(opt_gen)
             scaler_gen.update()
+            if torch.isnan(loss_gen):
+                _logger.error("generator loss is NaN (After unscaling) at step %d, epoch %d, batch idx %d ", step, epoch, batch_idx)
 
             # Update alpha and ensure less than 1
             alpha += cur_batch_size / (
                 (config.PROGRESSIVE_EPOCHS[step] * 0.5) * len(dataset) * config.MINIBATCH_REPEATS
             )
+            
             alpha = min(alpha, 1)
+        plot_loss_to_tensorboard(writer, loss_critic.item(), loss_gen.item(), tensorboard_loss_step)
+        tensorboard_loss_step += 1
         
-        if batch_idx % 500 == 0:
+        if batch_idx % 500 == 0 or (batch_idx == num_batches - 1):
             with torch.no_grad():
                 fixed_fakes = gen(config.FIXED_NOISE, alpha, step) * 0.5 + 0.5
-            plot_to_tensorboard(
+            plot_images_to_tensorboard(
                 writer,
-                loss_critic.item(),
-                loss_gen.item(),
                 real.detach(),
                 fixed_fakes.detach(),
-                tensorboard_step,
+                tensorboard_img_step,
             )
-            tensorboard_step += 1
+            tensorboard_img_step += 1
             
-            save_image(fixed_fakes, 'Results/'+ config.DATASET_NAME + f"/Images/img_{step}_{epoch}_{batch_idx}.png")
+            save_image(fixed_fakes, save_dir + f"/Images/img_{step}_{epoch}_{batch_idx}.png")
+            # generated images save directory
+            dir_ = save_dir + f"/Generated_Images_{step}_{epoch}_{batch_idx}"
+            createdir(dir_)
+            generate_fixed_examples(gen, config.MAX_IMG_SIZE_IDX, alpha, truncation=10, n=config.n, dir_=dir_, noise=config.FIXED_NOISE2)
 
         loop.set_postfix(
             gp=gp.item(),
             loss_gen=loss_gen.item(),
             loss_critic=loss_critic.item(),
         )
+        _logger.info('Step: %d, Epoch: %d, Batch: %d/%d, GP:%.4g, loss_critic:%.4g, loss_gen=%.4g ', step, epoch, batch_idx, num_batches, gp.item(), loss_critic.item(), loss_gen.item())
 
-    return tensorboard_step, alpha
+    return tensorboard_img_step, tensorboard_loss_step, alpha
 
 
-def finetune(gen, critic, opt_gen, opt_ciritc, epochs, save_dir ):
+def finetune(gen, critic, opt_gen, opt_critic, epochs, save_dir ):
+    
+    _logger.info("Starting finetuning...")
     
     scaler_critic = torch.cuda.amp.GradScaler()
     scaler_gen = torch.cuda.amp.GradScaler()
@@ -157,17 +198,17 @@ def finetune(gen, critic, opt_gen, opt_ciritc, epochs, save_dir ):
     gen.train()
     critic.train()
 
-    tensorboard_step = 0
+    tensorboard_img_step, tensorboard_loss_step = 0, 0
     # start at step that corresponds to img size that we set in config
     step = int(log2(config.START_TRAIN_AT_IMG_SIZE / 4))
     
-    alpha = 1e-5  # start with very low alpha
+    alpha = 1  # start with very low alpha
     loader, dataset = get_loader(4 * 2 ** step)  # 4->0, 8->1, 16->2, 32->3, 64 -> 4
     print(f"Current image size: {4 * 2 ** step}")
     
     for epoch in range(epochs):
-        print(f"Epoch [{epoch+1}/{num_epochs}]")
-        tensorboard_step, alpha = train_fn(
+        print(f"Epoch [{epoch+1}/{epochs}]")
+        tensorboard_img_step, tensorboard_loss_step, alpha = train_fn(
             critic,
             gen,
             loader,
@@ -176,14 +217,20 @@ def finetune(gen, critic, opt_gen, opt_ciritc, epochs, save_dir ):
             alpha,
             opt_critic,
             opt_gen,
-            tensorboard_step,
+            tensorboard_img_step,
+            tensorboard_loss_step,
             writer,
             scaler_gen,
             scaler_critic,
             epoch,
+            save_dir
         )
+        if epoch<len(epochs)-1:
+            _logger.info("Saving checkpoint...")
+            save_checkpoint(gen, opt_gen, filename=save_dir+ f"/generator_{epoch}.pth")
+            save_checkpoint(critic, opt_critic, filename=save_dir+ f"/critic_{epoch}.pth")
 
-
+    _logger.info("Saving checkpoint...")
     save_checkpoint(gen, opt_gen, filename=save_dir+ "/generator.pth")
     save_checkpoint(critic, opt_critic, filename=save_dir+ "/critic.pth")
 

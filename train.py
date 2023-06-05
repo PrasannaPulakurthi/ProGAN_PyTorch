@@ -166,7 +166,6 @@ def main():
 
     gen.train()
     critic.train()
-    quit()
 
     tensorboard_step = 0
     # start at step that corresponds to img size that we set in config

@@ -20,14 +20,14 @@
 #SBATCH --error=Results/CelebA/%x_%j.err    # Instruct Slurm to connect the batch script's standard error directly to the file name specified in the "filename pattern".
 
 # To send emails, set the adcdress below and remove one of the "#" signs.
-#SBATCH --mail-user=pp4405@rit.edu
+#SBATCH --mail-user=mm3424@rit.edu
 
 # notify on state change: BEGIN, END, FAIL or ALL
 #SBATCH --mail-type=ALL
 
 # 5 days is the run time MAX, anything over will be KILLED unless you talk with RC
 # Time limit days-hrs:min:sec
-#SBATCH --time=0-0:10:0
+#SBATCH --time=1-0:0:0
 
 # Put the job in the appropriate partition matchine the account and request FOUR cores
 #SBATCH --partition=debug  #currently tier3 is the partition where everyone is put.  To get a listing of partitions where the account can run use the command my-accounts
@@ -45,4 +45,6 @@ spack load py-tensorboard /xdxzh5y
 
 # time torchrun --standalone --nproc_per_node=1 train.py
 #time python -u train.py
-time python -u test.py
+time python -u td_compress.py False 'initial.3.conv' 63 10 'Results/Compression/Base'
+#time python -u td_compress.py False 'prog_blocks.3.conv2.conv' 64 10 'Results/Compression/Base'
+#time python -u td_compress_multilayer.py False 'initial.3.conv prog_blocks.0.conv1.conv prog_blocks.0.conv2.conv prog_blocks.1.conv1.conv prog_blocks.1.conv2.conv prog_blocks.2.conv1.conv prog_blocks.2.conv2.conv prog_blocks.3.conv1.conv prog_blocks.3.conv2.conv' 64 10 'Results/Compression/Base'
