@@ -5,8 +5,12 @@ import os
 import torchvision
 import torch.nn as nn
 import config
+from tqdm import tqdm
 from torchvision.utils import save_image
 from scipy.stats import truncnorm
+from utils_FID.inception_score import get_inception_score
+from utils_FID.fid_score import calculate_fid_given_paths
+from imageio import imsave
 
 # Print losses occasionally and print to tensorboard
 def plot_to_tensorboard(
@@ -100,3 +104,35 @@ def createdir(path):
         print("The new directory created at:"+path)
     else:
         print("The directory already exits at:"+path)
+
+def validate(fid_stat, gen_net: nn.Module, steps):
+
+    # eval mode
+    gen_net = gen_net.eval()
+
+    # get fid and inception score
+    fid_buffer_dir = "Results/"+ config.DATASET_NAME + f"/Generated_Images"
+    os.makedirs(fid_buffer_dir, exist_ok=True)
+
+    eval_iter = config.NUM_EVAL_IMGS // config.EVAL_BATCH_SIZE
+    img_list = list()
+    alpha = 1.0
+    for iter_idx in tqdm(range(eval_iter), desc='sample images'):
+        noise = torch.randn(config.EVAL_BATCH_SIZE, config.Z_DIM, 1, 1).to(config.DEVICE)
+        # generate a batch of images
+        gen_imgs = gen_net(noise, alpha, steps)
+        gen_imgs = gen_imgs.mul_(127.5).add_(127.5).clamp_(0.0, 255.0).permute(0, 2, 3, 1).to('cpu', torch.uint8).numpy()
+        for img_idx, img in enumerate(gen_imgs):
+            file_name = os.path.join(fid_buffer_dir, f'img_{iter_idx}_{img_idx}.png')
+            imsave(file_name, img)
+        img_list.extend(list(gen_imgs))
+
+    # get inception score
+    print('=> calculate inception score')
+    mean, std = get_inception_score(img_list)
+
+    # get fid score
+    print('=> calculate fid score')
+    fid_score = calculate_fid_given_paths([fid_buffer_dir, fid_stat], inception_path=None)
+    
+    return mean, std , fid_score
