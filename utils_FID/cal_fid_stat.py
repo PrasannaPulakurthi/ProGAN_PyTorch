@@ -46,7 +46,7 @@ def main():
 
     # loads all images into memory (this might require a lot of RAM!)
     print("load images..", end=" ", flush=True)
-    image_list = glob.glob(os.path.join(data_path, '*.jpg'))
+    image_list = glob.glob(os.path.join(data_path, '*.png'))
     N = len(image_list)
     print("%d images found" % N)
     images = np.zeros((N,64,64,3), dtype=np.float32)
