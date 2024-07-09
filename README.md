@@ -1,4 +1,5 @@
 # ProGAN
+![Celeba](assets/celeba.gif)
 ![Celeba](assets/celeba.png)
 
 
