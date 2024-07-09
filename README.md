@@ -1,6 +1,6 @@
 # ProGAN
 ![Celeba](assets/celeba.gif)
-![Celeba](assets/celeba.png)
+![Celeba](assets/img_4_29_3000.png)
 
 
 Download CelebA dataset:
